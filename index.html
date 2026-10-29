@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BEAR">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAB40lEQVR42u3dsa3CMBRA0QRliaxBTc8UKViBQVghBVtQU7MGS1CwAIolEsv2yzntl/hgXTnSE8Z9d3508MvBEiAOxIE4EAfiQByIA3EQ3ZD4+/tujSIbJzsHHiuIA3EgDsSBOBAH4kAcIA7EgTgQB+JAHIgDcSAO9mio8219XvP/H+l4CfbKdg7EgTgQB+JAHCAOxIE4EAfiQByIA3EgDsQB4kAciION9YmbmvwOaWx+hxSPFcSBOBAH4kAciANxsG/FTtnHO5MebzXsHIgDcSAOxIE4EAfiQByEN8T7SGumjRkXusGprp0DcSAOxIE4EAfiQByIg/CKTUjXTAzrnIGuec9uasJjBXEgDsQB4kAciANxUETAu+xbVOf81M6BOBAH4kAciANxIA7EgTgQB4gDcSAOxIE4EAfiQByIA3GAOBAH4kAciANxIA7EQTiVnrJfPlee7wx+nf/XzoE4EAfiQByIA8SBOBAHmTR5l32peWKL99HbORAH4kAciANxIA7EAeJgQbEJ6ek2W/1NPK+55rZ2DsSBOBAH4kAciANxIA7CKzYhzTfXw86BOBAH4kAciANxIA4QB+JAHIgDcSAOxIE4EAfiAHGQkPoO6ThZIzsHiANxIA7EgTgQB+JAHET1BfsrMboX4m1SAAAAAElFTkSuQmCC">
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAB40lEQVR42u3dsa3CMBRA0QRliaxBTc8UKViBQVghBVtQU7MGS1CwAIolEsv2yzntl/hgXTnSE8Z9d3508MvBEiAOxIE4EAfiQByIA3EQ3ZD4+/tujSIbJzsHHiuIA3EgDsSBOBAH4kAcIA7EgTgQB+JAHIgDcSAO9mio8219XvP/H+l4CfbKdg7EgTgQB+JAHCAOxIE4EAfiQByIA3EgDsQB4kAciION9YmbmvwOaWx+hxSPFcSBOBAH4kAciANxsG/FTtnHO5MebzXsHIgDcSAOxIE4EAfiQByEN8T7SGumjRkXusGprp0DcSAOxIE4EAfiQByIg/CKTUjXTAzrnIGuec9uasJjBXEgDsQB4kAciANxUETAu+xbVOf81M6BOBAH4kAciANxIA7EgTgQB4gDcSAOxIE4EAfiQByIA3GAOBAH4kAciANxIA7EQTiVnrJfPlee7wx+nf/XzoE4EAfiQByIA8SBOBAHmTR5l32peWKL99HbORAH4kAciANxIA7EAeJgQbEJ6ek2W/1NPK+55rZ2DsSBOBAH4kAciANxIA7CKzYhzTfXw86BOBAH4kAciANxIA4QB+JAHIgDcSAOxIE4EAfiAHGQkPoO6ThZIzsHiANxIA7EgTgQB+JAHET1BfsrMboX4m1SAAAAAElFTkSuQmCC">
+<meta name="theme-color" content="#001a36">
+<title>BEAR</title>
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#001a36;
+    touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;overscroll-behavior:none;position:fixed;inset:0}
+  canvas{display:block;position:absolute;left:0;top:0;touch-action:none;
+    image-rendering:pixelated;image-rendering:crisp-edges}
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+(function(){
+'use strict';
+// ---------- Low-res buffer ----------
+const W = 160; let H = 288; let gameReady = false;
+const screen = document.getElementById('screen');
+const sctx = screen.getContext('2d');
+const buf = document.createElement('canvas'); buf.width = W; buf.height = H;
+const g = buf.getContext('2d');
+g.imageSmoothingEnabled = false;
+let scale = 1, offX = 0, offY = 0, dpr = 1;
+
+function resize(){
+  dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 4));
+  const cw = Math.floor(window.innerWidth * dpr), ch = Math.floor(window.innerHeight * dpr);
+  screen.width = cw; screen.height = ch;
+  screen.style.width = window.innerWidth + 'px'; screen.style.height = window.innerHeight + 'px';
+  // stretch the low-res buffer height to fill the phone's aspect ratio (crisp, no letterbox)
+  const nh = Math.max(256, Math.min(352, Math.round(W * ch / cw)));
+  if (nh !== H){ H = nh; buf.height = H; g.imageSmoothingEnabled = false; if (gameReady) PLAYER_Y = H - 68; }
+  let s = Math.min(cw / W, ch / H);
+  if (s >= 3) s = Math.floor(s);           // integer scaling = perfectly even pixels
+  scale = s;
+  offX = Math.floor((cw - W * s) / 2); offY = Math.floor((ch - H * s) / 2);
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+resize();
+
+// ---------- Palette (NES-ish) ----------
+const PAL = {
+  N:'#002E5D', W:'#fcfcfc', R:'#0047BA', K:'#000000', S:'#c8804c', B:'#7c3c00',
+  r:'#d82800', w:'#fcfcfc', D:'#383838', y:'#f8b800', o:'#a80020', L:'#3cbcfc'
+};
+const C = {
+  grass1:'#00a800', grass2:'#00942a', line:'#fcfcfc', hash:'#bcfcbc', navy:'#002E5D', royal:'#0047BA',
+  white:'#fcfcfc', black:'#000000', gold:'#f8b800', red:'#d82800', sky:'#3cbcfc', dark:'#001a36', grey:'#7c7c7c'
+};
+
+// ---------- Sprites (hand-defined pixel arrays) ----------
+const SPR = {
+  playerA: [
+    "...WWWW...",
+    "..WWRRWW..",
+    "..WWRRWW..",
+    "...KWWK...",
+    ".NNNNNNNN.",
+    "NWWNNNNWWN",
+    "SNNNWWNNNB",
+    "SNNWNNWNBB",
+    "SNNNNNNNBS",
+    ".NNNNNNNN.",
+    "..WWWWWW..",
+    "..WW..WW..",
+    "..RR..RR..",
+    "..KK......"],
+  playerB: [
+    "...WWWW...",
+    "..WWRRWW..",
+    "..WWRRWW..",
+    "...KWWK...",
+    ".NNNNNNNN.",
+    "NWWNNNNWWN",
+    "SNNNWWNNNB",
+    "SNNWNNWNBB",
+    "SNNNNNNNBS",
+    ".NNNNNNNN.",
+    "..WWWWWW..",
+    "..WW..WW..",
+    "..RR..RR..",
+    "......KK.."],
+  defA: [
+    "..KK......",
+    "..ww..ww..",
+    "..wwwwww..",
+    ".rrrrrrrr.",
+    "SrrrrrrrrS",
+    "SrrwwwwrrS",
+    "SrrrwwrrrS",
+    "SrrrwwrrrS",
+    "rrrrrrrrrr",
+    ".rrrrrrrr.",
+    "...KDDK...",
+    "..DDyyDD..",
+    "..DDyyDD..",
+    "...DDDD..."],
+  defB: [
+    "......KK..",
+    "..ww..ww..",
+    "..wwwwww..",
+    ".rrrrrrrr.",
+    "SrrrrrrrrS",
+    "SrrwwwwrrS",
+    "SrrrwwrrrS",
+    "SrrrwwrrrS",
+    "rrrrrrrrrr",
+    ".rrrrrrrr.",
+    "...KDDK...",
+    "..DDyyDD..",
+    "..DDyyDD..",
+    "...DDDD..."],
+  ball: [
+    "..BBBB..",
+    ".BWBWBB.",
+    "BBWWWWBB",
+    ".BWBWBB.",
+    "..BBBB.."],
+  speaker: [
+    "...K.....",
+    "..KK.....",
+    "KKKK.....",
+    "KKKK.....",
+    "KKKK.....",
+    "..KK.....",
+    "...K....."],
+  paw: [
+    ".N.N.N.",
+    ".N.N.N.",
+    ".......",
+    "..NNN..",
+    ".NNNNN.",
+    ".NNNNN.",
+    "..N.N.."]
+};
+function makeSprite(rows, pal, flipX){
+  const h = rows.length, w = rows[0].length;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  for (let j=0;j<h;j++) for (let i=0;i<w;i++){
+    const ch = rows[j][flipX ? w-1-i : i];
+    const col = pal[ch];
+    if (ch !== '.' && col){ x.fillStyle = col; x.fillRect(i,j,1,1); }
+  }
+  return c;
+}
+const palTracker = Object.assign({}, PAL, { r:'#a80020', D:'#f8b800', y:'#d82800' });
+const palGhost = {}; for (const k in PAL) palGhost[k] = '#3cbcfc';
+const palWhite = {}; for (const k in PAL) palWhite[k] = '#fcfcfc';
+const S = {
+  pA: makeSprite(SPR.playerA, PAL), pB: makeSprite(SPR.playerB, PAL),
+  pAf: makeSprite(SPR.playerA, PAL, true), pBf: makeSprite(SPR.playerB, PAL, true),
+  pGhost: makeSprite(SPR.playerA, palGhost), pWhite: makeSprite(SPR.playerA, palWhite),
+  dA: makeSprite(SPR.defA, PAL), dB: makeSprite(SPR.defB, PAL),
+  tA: makeSprite(SPR.defA, palTracker), tB: makeSprite(SPR.defB, palTracker),
+  ball: makeSprite(SPR.ball, PAL),
+  spk: makeSprite(SPR.speaker, {K:'#fcfcfc'}),
+  paw: makeSprite(SPR.paw, {N:'#fcfcfc'}), pawNavy: makeSprite(SPR.paw, PAL)
+};
+
+// ---------- 3x5 bitmap font ----------
+const FONT = {
+  A:[2,5,7,5,5],B:[6,5,6,5,6],C:[3,4,4,4,3],D:[6,5,5,5,6],E:[7,4,6,4,7],F:[7,4,6,4,4],G:[3,4,5,5,3],
+  H:[5,5,7,5,5],I:[7,2,2,2,7],J:[1,1,1,5,2],K:[5,5,6,5,5],L:[4,4,4,4,7],M:[5,7,7,5,5],N:[6,5,5,5,5],
+  O:[2,5,5,5,2],P:[6,5,6,4,4],Q:[2,5,5,6,3],R:[6,5,6,5,5],S:[3,4,2,1,6],T:[7,2,2,2,2],U:[5,5,5,5,7],
+  V:[5,5,5,5,2],W:[5,5,7,7,5],X:[5,5,2,5,5],Y:[5,5,2,2,2],Z:[7,1,2,4,7],
+  '0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[6,1,2,4,7],'3':[6,1,2,1,6],'4':[5,5,7,1,1],'5':[7,4,6,1,6],
+  '6':[3,4,7,5,7],'7':[7,1,1,2,2],'8':[7,5,7,5,7],'9':[7,5,7,1,6],
+  ' ':[0,0,0,0,0],':':[0,2,0,2,0],'!':[2,2,2,0,2],'-':[0,0,7,0,0],'.':[0,0,0,0,2],'+':[0,2,7,2,0],
+  '/':[1,1,2,4,4],"'":[2,2,0,0,0],'?':[6,1,2,0,2],',':[0,0,0,2,4],'&':[2,5,2,5,3],'=':[0,7,0,7,0],
+  '<':[1,2,4,2,1],'>':[4,2,1,2,4]
+};
+function textWidth(str, s){ return str.length * 4 * s - s; }
+function drawText(str, x, y, col, s, align, shadow){
+  s = s || 1; str = String(str).toUpperCase();
+  let w = textWidth(str, s);
+  if (align === 'center') x = Math.round(x - w/2); else if (align === 'right') x = Math.round(x - w);
+  if (shadow){ const o = Math.max(1, Math.round(s / 3)); drawText(str, x + o, y + o, shadow, s, 'left'); }
+  g.fillStyle = col;
+  for (let n=0;n<str.length;n++){
+    const gl = FONT[str[n]] || FONT['?'];
+    for (let r=0;r<5;r++){ const bits = gl[r];
+      for (let c=0;c<3;c++) if (bits & (4>>c)) g.fillRect(x + n*4*s + c*s, y + r*s, s, s);
+    }
+  }
+}
+
+// ---------- Chiptune audio ----------
+let actx = null, muted = false;
+try { muted = localStorage.getItem('bear_muted') === '1'; } catch(e){}
+let audioUnlocked = false;
+function initAudio(){
+  if (!actx){ try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){ actx = null; } }
+  if (!actx) return;
+  if (actx.state !== 'running') { try { actx.resume(); } catch(e){} }
+  if (!audioUnlocked){
+    // iOS Safari: play a 1-sample silent buffer inside the user gesture to unlock audio output
+    try { const b = actx.createBuffer(1, 1, 22050), s = actx.createBufferSource(); s.buffer = b; s.connect(actx.destination); s.start(0); audioUnlocked = true; } catch(e){}
+  }
+}
+['touchstart','touchend','pointerdown','pointerup','click','keydown'].forEach(ev =>
+  window.addEventListener(ev, initAudio, { capture: true, passive: true }));
+document.addEventListener('visibilitychange', () => { if (!document.hidden && actx && actx.state !== 'running') { try { actx.resume(); } catch(e){} } });
+function tone(freq, dur, type, vol, when, slideTo){
+  if (!actx || muted) return;
+  const t0 = actx.currentTime + (when || 0);
+  const o = actx.createOscillator(), gn = actx.createGain();
+  o.type = type || 'square';
+  o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  gn.gain.setValueAtTime(vol || 0.08, t0);
+  gn.gain.setValueAtTime(vol || 0.08, t0 + dur * 0.7);
+  gn.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(gn); gn.connect(actx.destination);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noise(dur, vol, when){
+  if (!actx || muted) return;
+  const t0 = actx.currentTime + (when || 0);
+  const len = Math.floor(actx.sampleRate * dur);
+  const b = actx.createBuffer(1, len, actx.sampleRate), d = b.getChannelData(0);
+  // chunky 'NES' noise: sample-and-hold random values
+  let v = 0; for (let i=0;i<len;i++){ if (i % 6 === 0) v = Math.random()*2-1; d[i] = v * (1 - i/len); }
+  const s = actx.createBufferSource(); s.buffer = b;
+  const gn = actx.createGain(); gn.gain.value = vol || 0.15;
+  s.connect(gn); gn.connect(actx.destination); s.start(t0);
+}
+const SFX = {
+  whistle(){ for (let i=0;i<10;i++) tone(i%2 ? 2350 : 2100, 0.035, 'square', 0.04, i*0.035); },
+  juke(){ tone(300, 0.12, 'square', 0.06, 0, 1200); },
+  pickup(){ tone(988, 0.06, 'square', 0.06); tone(1319, 0.1, 'square', 0.06, 0.06); },
+  td(){ const n=[523,659,784,1047,784,1047]; n.forEach((f,i)=>{ tone(f, 0.11, 'square', 0.06, i*0.1); tone(f/2, 0.11, 'triangle', 0.12, i*0.1); });
+        tone(1047, 0.35, 'square', 0.06, 0.6); tone(523, 0.35, 'triangle', 0.12, 0.6); },
+  tackle(){ noise(0.3, 0.25); tone(220, 0.3, 'square', 0.08, 0, 40); tone(110, 0.4, 'triangle', 0.15, 0.05, 30); },
+  click(){ tone(660, 0.05, 'square', 0.05); },
+  over(){ [392,349,311,262].forEach((f,i)=>tone(f, 0.16, 'triangle', 0.14, 0.45 + i*0.16)); }
+};
+
+// ---------- Game state ----------
+const PXY = 6;              // pixels per yard
+let PLAYER_Y = H - 68;       // player's fixed screen row
+let state = 'title';        // title | play | tackled | over
+let best = 0; try { best = parseInt(localStorage.getItem('bear_best') || '0', 10) || 0; } catch(e){}
+let newBest = false;
+let player, defenders, balls, particles, popups;
+let dist, speed, elapsed, spawnT, ballT, bonus, tds, lastTDYard, shake, flash, tdText, tackleT, boost, overT, titleScroll = 0;
+
+function reset(){
+  player = { x: W/2 - 5, tx: W/2 - 5, jukeT: 0, jukeCD: 0, anim: 0, flip: false, grace: 0 };
+  defenders = []; balls = []; particles = []; popups = [];
+  dist = 0; speed = 62; elapsed = 0; spawnT = 1.2; ballT = 2.5; bonus = 0; tds = 0; lastTDYard = 0;
+  shake = 0; flash = 0; tdText = 0; tackleT = 0; boost = 0; overT = 0; newBest = false;
+}
+gameReady = true; PLAYER_Y = H - 68;
+reset();
+
+function yards(){ return Math.floor(dist / PXY); }
+function score(){ return yards() * 10 + bonus; }
+
+function startGame(){ initAudio(); reset(); state = 'play'; SFX.whistle(); }
+
+function burst(x, y, n, cols, spd){
+  for (let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2, v = (0.3 + Math.random()) * (spd || 70);
+    particles.push({ x, y, vx: Math.cos(a)*v, vy: Math.sin(a)*v - 30, life: 0.6 + Math.random()*0.6,
+      t: 0, col: cols[(Math.random()*cols.length)|0], sz: Math.random() < 0.5 ? 2 : 1 });
+  }
+}
+function popup(txt, x, y, col){ popups.push({ txt, x, y, col, t: 0 }); }
+
+function spawnDefender(){
+  const lvl = Math.min(1, elapsed / 90);
+  const tracker = Math.random() < 0.18 + lvl * 0.4;
+  defenders.push({
+    x: 8 + Math.random() * (W - 26), y: -16, w: 10, h: 14,
+    vy: 12 + Math.random() * (20 + lvl * 50),
+    vx: tracker ? 0 : (Math.random() < 0.3 ? (Math.random() - 0.5) * 30 : 0),
+    tracker, turn: 22 + lvl * 40 + Math.random()*15, passed: false, anim: Math.random()*10
+  });
+}
+
+// ---------- Input ----------
+const keys = {};
+let ptr = null;
+function toBuf(cx, cy){ return { x: (cx * dpr - offX) / scale, y: (cy * dpr - offY) / scale }; }
+function inMute(p){ return p.x >= W - 16 && p.y <= 14; }
+const BTN = { x: 30, y: 196, w: 100, h: 26 };
+function MY(){ return Math.floor((H - 288) / 2); }
+function inBtn(p){ const by = BTN.y + MY(); return p.x >= BTN.x - 6 && p.x <= BTN.x + BTN.w + 6 && p.y >= by - 6 && p.y <= by + BTN.h + 6; }
+function toggleMute(){ muted = !muted; try { localStorage.setItem('bear_muted', muted ? '1' : '0'); } catch(e){} if (!muted){ initAudio(); SFX.click(); } }
+function juke(){
+  if (state !== 'play' || player.jukeCD > 0) return;
+  player.jukeT = 0.45; player.jukeCD = 1.3; SFX.juke();
+  burst(player.x + 5, PLAYER_Y + 10, 8, [C.white, C.sky], 40);
+}
+screen.addEventListener('pointerdown', e => {
+  e.preventDefault(); initAudio();
+  const p = toBuf(e.clientX, e.clientY);
+  if (inMute(p)){ toggleMute(); return; }
+  if (state === 'title' || (state === 'over' && overT > 0.6)){ if (state === 'title' || inBtn(p)) { startGame(); } return; }
+  ptr = { id: e.pointerId, sx: e.clientX, sy: e.clientY, lx: e.clientX, t: performance.now(), moved: false };
+  try { screen.setPointerCapture(e.pointerId); } catch(_){}
+}, { passive: false });
+screen.addEventListener('pointermove', e => {
+  if (!ptr || e.pointerId !== ptr.id) return;
+  e.preventDefault();
+  const dx = (e.clientX - ptr.lx) * dpr / scale;
+  ptr.lx = e.clientX;
+  if (Math.abs(e.clientX - ptr.sx) > 8 || Math.abs(e.clientY - ptr.sy) > 8) ptr.moved = true;
+  if (state === 'play') player.tx += dx * 1.25;
+}, { passive: false });
+function endPtr(e){
+  if (!ptr || e.pointerId !== ptr.id) return;
+  if (!ptr.moved && performance.now() - ptr.t < 300) juke();
+  ptr = null;
+}
+screen.addEventListener('pointerup', endPtr);
+screen.addEventListener('pointercancel', e => { ptr = null; });
+['touchstart','touchmove','touchend','gesturestart','gesturechange','dblclick','contextmenu'].forEach(ev =>
+  document.addEventListener(ev, e => { if (e.cancelable) e.preventDefault(); }, { passive: false }));
+window.addEventListener('keydown', e => {
+  const k = e.key;
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(k)) e.preventDefault();
+  keys[k.toLowerCase()] = true;
+  if (e.repeat) return;
+  initAudio();
+  if (k === 'm' || k === 'M') { toggleMute(); return; }
+  if (state === 'title' && (k === 'Enter' || k === ' ')) startGame();
+  else if (state === 'over' && overT > 0.6 && (k === 'Enter' || k === ' ')) startGame();
+  else if (state === 'play' && (k === ' ' || k === 'ArrowUp' || k === 'w' || k === 'W')) juke();
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+// ---------- Update ----------
+function update(dt){
+  titleScroll += dt * 30;
+  for (const p of particles){ p.t += dt; p.vy += 160 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+  particles = particles.filter(p => p.t < p.life);
+  for (const p of popups){ p.t += dt; p.y -= 18 * dt; }
+  popups = popups.filter(p => p.t < 0.9);
+  shake = Math.max(0, shake - dt * 18);
+  flash = Math.max(0, flash - dt);
+  tdText = Math.max(0, tdText - dt);
+
+  if (state === 'tackled'){
+    tackleT += dt;
+    if (tackleT > 0.9){ state = 'over'; overT = 0; SFX.over(); }
+    return;
+  }
+  if (state === 'over'){ overT += dt; return; }
+  if (state !== 'play') return;
+
+  elapsed += dt;
+  speed = Math.min(170, 62 + elapsed * 1.6);
+  const boostAmt = boost > 0 ? speed * 0.9 : 0;
+  boost = Math.max(0, boost - dt);
+  const scroll = (speed + boostAmt) * dt;
+  const prevY = yards();
+  dist += scroll;
+
+  // touchdown every 100 yards
+  const y = yards();
+  if (Math.floor(y / 100) > Math.floor(prevY / 100)){
+    tds++; bonus += 700; flash = 0.5; tdText = 1.6; shake = 3; player.grace = 1.2;
+    SFX.td();
+    burst(player.x + 5, PLAYER_Y, 40, [C.white, C.royal, C.navy, C.gold, C.sky], 110);
+    burst(W/2, 60, 30, [C.white, C.royal, C.gold], 90);
+    popup('+700', player.x + 5, PLAYER_Y - 12, C.gold);
+    // clear nearby rushers in celebration
+    for (const d of defenders) if (d.y > PLAYER_Y - 60) { burst(d.x + 5, d.y + 7, 6, [C.red, C.white], 50); d.dead = true; }
+  }
+
+  // player movement
+  const kdir = (keys['arrowleft'] || keys['a'] ? -1 : 0) + (keys['arrowright'] || keys['d'] ? 1 : 0);
+  player.tx += kdir * 120 * dt;
+  player.tx = Math.max(6, Math.min(W - 16, player.tx));
+  const old = player.x;
+  player.x += (player.tx - player.x) * Math.min(1, dt * 16);
+  if (player.x - old < -0.2) player.flip = true; else if (player.x - old > 0.2) player.flip = false;
+  player.anim += scroll;
+  player.jukeT = Math.max(0, player.jukeT - dt);
+  player.jukeCD = Math.max(0, player.jukeCD - dt);
+  player.grace = Math.max(0, player.grace - dt);
+
+  // spawns
+  const lvl = Math.min(1, elapsed / 90);
+  spawnT -= dt;
+  if (spawnT <= 0 && player.grace <= 0){
+    spawnDefender();
+    if (Math.random() < lvl * 0.5) spawnDefender();
+    spawnT = Math.max(0.32, 1.15 - elapsed * 0.012) * (0.7 + Math.random() * 0.6);
+  }
+  ballT -= dt;
+  if (ballT <= 0){ balls.push({ x: 10 + Math.random() * (W - 28), y: -8, t: 0 }); ballT = 2 + Math.random() * 2.5; }
+
+  // defenders
+  for (const d of defenders){
+    d.anim += dt * 10;
+    d.y += scroll + d.vy * dt;
+    if (d.tracker && d.y < PLAYER_Y + 4){
+      const dx = (player.x) - d.x;
+      d.vx += Math.sign(dx) * d.turn * 3 * dt;
+      d.vx = Math.max(-d.turn, Math.min(d.turn, d.vx));
+    }
+    d.x += d.vx * dt;
+    if (d.x < 6){ d.x = 6; d.vx = Math.abs(d.vx); }
+    if (d.x > W - 16){ d.x = W - 16; d.vx = -Math.abs(d.vx); }
+    // collision
+    if (!d.passed && !d.dead){
+      const hit = player.x + 2 < d.x + d.w - 2 && player.x + 8 > d.x + 2 && PLAYER_Y + 2 < d.y + d.h - 2 && PLAYER_Y + 12 > d.y + 3;
+      if (hit){
+        if (player.jukeT > 0 || player.grace > 0){
+          d.passed = true;
+          if (player.jukeT > 0){ player.jukeT = Math.min(player.jukeT, 0.12); bonus += 100; popup('JUKE +100', d.x + 5, d.y - 4, C.sky); tone(1568, 0.08, 'square', 0.05); }
+        } else {
+          state = 'tackled'; tackleT = 0; shake = 7; SFX.tackle();
+          burst(player.x + 5, PLAYER_Y + 6, 26, [C.white, C.navy, C.red, C.gold, '#c8804c'], 90);
+          const sc = score();
+          if (sc > best){ best = sc; newBest = true; try { localStorage.setItem('bear_best', String(best)); } catch(e){} }
+          return;
+        }
+      }
+    }
+  }
+  defenders = defenders.filter(d => d.y < H + 20 && !d.dead);
+
+  // balls
+  for (const b of balls){
+    b.t += dt; b.y += scroll;
+    if (!b.got && player.x < b.x + 8 && player.x + 10 > b.x && PLAYER_Y < b.y + 5 && PLAYER_Y + 14 > b.y){
+      b.got = true; bonus += 50; boost = 0.5; SFX.pickup();
+      burst(b.x + 4, b.y + 2, 10, [C.gold, C.white, '#7c3c00'], 60);
+      popup('+50 BURST', b.x + 4, b.y - 6, C.gold);
+    }
+  }
+  balls = balls.filter(b => b.y < H + 10 && !b.got);
+}
+
+// ---------- Render ----------
+function drawField(d){
+  // d = distance in px; world position p shows at screen y = PLAYER_Y - (p - d)
+  const topP = d + PLAYER_Y, botP = d + PLAYER_Y - H;
+  // grass stripes every 5 yards
+  const stripe = 5 * PXY;
+  for (let k = Math.floor(botP / stripe) - 1; k * stripe <= topP + stripe; k++){
+    const y0 = Math.round(PLAYER_Y - ((k + 1) * stripe - d));
+    g.fillStyle = (k & 1) ? C.grass1 : C.grass2;
+    g.fillRect(0, y0, W, stripe);
+  }
+  // yard lines
+  for (let k = Math.floor(botP / stripe) - 1; k * stripe <= topP + stripe; k++){
+    const y0 = Math.round(PLAYER_Y - (k * stripe - d));
+    const yd = ((k * 5) % 100 + 100) % 100;
+    if (yd === 0) continue;
+    g.fillStyle = C.line; g.fillRect(6, y0, W - 12, 1);
+    if (yd % 10 === 0){
+      const num = String(yd <= 50 ? yd : 100 - yd);
+      drawText(num, 16, y0 - 7, C.line, 1, 'left');
+      drawText(num, W - 16, y0 - 7, C.line, 1, 'right');
+    }
+  }
+  // hash marks every yard
+  g.fillStyle = C.hash;
+  for (let p = Math.floor(botP / PXY); p * PXY <= topP; p++){
+    const y0 = Math.round(PLAYER_Y - (p * PXY - d));
+    g.fillRect(56, y0, 3, 1); g.fillRect(W - 59, y0, 3, 1);
+    g.fillRect(6, y0, 2, 1); g.fillRect(W - 8, y0, 2, 1);
+  }
+  // end zones: 10 yards after every 100-yard mark
+  const ez = 100 * PXY;
+  for (let k = Math.floor(botP / ez); k * ez <= topP; k++){
+    if (k <= 0) continue;
+    const yBottom = Math.round(PLAYER_Y - (k * ez - d));
+    const hgt = 10 * PXY, yTop = yBottom - hgt;
+    g.fillStyle = C.navy; g.fillRect(0, yTop, W, hgt);
+    // checker pixel pattern
+    g.fillStyle = C.royal;
+    for (let yy = 0; yy < hgt; yy += 4) for (let xx = ((yy/4)&1)*4; xx < W; xx += 8) g.fillRect(xx, yTop + yy, 4, 4);
+    g.fillStyle = C.navy; g.fillRect(14, yTop + 20, W - 28, 21);
+    drawText('BEAR', W/2, yTop + 23, C.white, 3, 'center', C.black);
+    g.fillStyle = C.line; g.fillRect(0, yBottom - 1, W, 2);
+  }
+  // sidelines
+  g.fillStyle = C.line; g.fillRect(4, 0, 2, H); g.fillRect(W - 6, 0, 2, H);
+  g.fillStyle = C.navy; g.fillRect(0, 0, 4, H); g.fillRect(W - 4, 0, 4, H);
+}
+
+function drawPlayer(){
+  const x = Math.round(player.x), y = PLAYER_Y;
+  if (state === 'tackled' || state === 'over'){
+    // knocked down: draw sideways-ish (rotated 90deg) with stars
+    g.save(); g.translate(x + 7, y + 7); g.rotate(Math.PI / 2); g.drawImage(S.pA, -5, -7); g.restore();
+    const t = (state === 'over' ? overT : tackleT) * 6;
+    g.fillStyle = C.gold;
+    for (let i=0;i<3;i++){ const a = t + i * 2.09; g.fillRect(Math.round(x + 5 + Math.cos(a) * 9), Math.round(y - 2 + Math.sin(a) * 3), 2, 2); }
+    return;
+  }
+  const frame = Math.floor(player.anim / 7) & 1;
+  if (player.jukeT > 0){
+    // spin: afterimages + flip frames
+    const ph = Math.floor(player.jukeT * 30);
+    g.globalAlpha = 0.5; g.drawImage(S.pGhost, x - 4, y + 3); g.drawImage(S.pGhost, x + 4, y + 3); g.globalAlpha = 1;
+    g.drawImage(ph % 4 < 2 ? S.pA : S.pWhite, ph & 1 ? x - 1 : x + 1, y);
+    return;
+  }
+  if (player.grace > 0 && Math.floor(player.grace * 16) & 1) return;
+  const spr = frame ? (player.flip ? S.pBf : S.pB) : (player.flip ? S.pAf : S.pA);
+  g.drawImage(spr, x, y);
+}
+
+function drawHUD(){
+  g.fillStyle = C.dark; g.fillRect(0, 0, W, 15);
+  g.fillStyle = C.royal; g.fillRect(0, 15, W, 1);
+  drawText('YDS ' + yards(), 4, 5, C.white, 1);
+  drawText(String(score()).padStart(6, '0'), W/2 + 6, 5, C.gold, 1, 'center');
+  // juke meter
+  const ready = player.jukeCD <= 0;
+  g.fillStyle = C.grey; g.fillRect(W - 50, 6, 28, 4);
+  g.fillStyle = ready ? C.sky : C.royal; g.fillRect(W - 50, 6, Math.round(28 * (1 - player.jukeCD / 1.3)), 4);
+  drawMute();
+}
+function drawMute(){
+  g.drawImage(S.spk, W - 14, 4);
+  if (muted){ g.fillStyle = C.red; for (let i=0;i<5;i++){ g.fillRect(W - 9 + i, 5 + i, 1, 1); g.fillRect(W - 5 - i, 5 + i, 1, 1); } }
+  else { g.fillStyle = C.white; g.fillRect(W - 8, 6, 1, 3); g.fillRect(W - 6, 5, 1, 5); }
+}
+
+function drawButton(label, t){
+  const BY = BTN.y + MY();
+  const bob = Math.floor(t * 3) & 1;
+  g.fillStyle = C.black; g.fillRect(BTN.x + 2, BY + 2, BTN.w, BTN.h);
+  g.fillStyle = C.white; g.fillRect(BTN.x, BY - bob, BTN.w, BTN.h);
+  g.fillStyle = C.royal; g.fillRect(BTN.x + 2, BY + 2 - bob, BTN.w - 4, BTN.h - 4);
+  drawText(label, W/2, BY + 8 - bob, C.white, 2, 'center', C.navy);
+}
+
+function render(t){
+  const sx = shake > 0 ? Math.round((Math.random() * 2 - 1) * shake) : 0;
+  const sy = shake > 0 ? Math.round((Math.random() * 2 - 1) * shake) : 0;
+  g.save(); g.translate(sx, sy);
+  const fd = state === 'title' ? titleScroll : dist;
+  drawField(fd);
+
+  if (state !== 'title'){
+    for (const b of balls){
+      const by = Math.round(b.y + (Math.floor(b.t * 4) & 1));
+      g.drawImage(S.ball, Math.round(b.x), by);
+      if (Math.floor(b.t * 5) % 3 === 0){ g.fillStyle = C.white; g.fillRect(Math.round(b.x) + 7, by - 2, 1, 1); }
+    }
+    for (const d of defenders){
+      const f = Math.floor(d.anim) & 1;
+      const spr = d.tracker ? (f ? S.tB : S.tA) : (f ? S.dB : S.dA);
+      if (d.passed) g.globalAlpha = 0.45;
+      g.drawImage(spr, Math.round(d.x), Math.round(d.y));
+      g.globalAlpha = 1;
+    }
+    drawPlayer();
+  }
+  for (const p of particles){ g.fillStyle = p.col; g.fillRect(Math.round(p.x), Math.round(p.y), p.sz, p.sz); }
+  for (const p of popups) drawText(p.txt, p.x, Math.round(p.y), p.col, 1, 'center', C.black);
+  g.restore();
+
+  if (flash > 0){ g.fillStyle = (Math.floor(flash * 20) & 1) ? C.white : C.royal; g.globalAlpha = Math.min(0.7, flash * 1.6); g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
+
+  if (state === 'play' || state === 'tackled'){
+    drawHUD();
+    if (tdText > 0){
+      const col = (Math.floor(tdText * 10) & 1) ? C.gold : C.white;
+      const ty = Math.floor(H * 0.32); g.fillStyle = C.navy; g.fillRect(0, ty, W, 30);
+      g.fillStyle = C.white; g.fillRect(0, ty, W, 1); g.fillRect(0, ty + 29, W, 1);
+      drawText('TOUCHDOWN!', W/2, ty + 6, col, 2, 'center', C.black);
+      drawText('TD ' + tds + '  +700', W/2, ty + 21, C.sky, 1, 'center');
+    }
+    if (state === 'play' && elapsed < 2.2 && tds === 0){
+      drawText('HIKE!', W/2, Math.floor(H * 0.4), C.white, 3, 'center', C.navy);
+    }
+  } else if (state === 'title'){
+    drawTitle(t);
+  } else if (state === 'over'){
+    drawOver(t);
+  }
+}
+
+function panel(x, y, w, h){
+  g.fillStyle = C.black; g.fillRect(x + 3, y + 3, w, h);
+  g.fillStyle = C.white; g.fillRect(x, y, w, h);
+  g.fillStyle = C.navy; g.fillRect(x + 2, y + 2, w - 4, h - 4);
+}
+
+function drawTitle(t){
+  g.fillStyle = 'rgba(0,26,54,0.55)'; g.fillRect(0, 0, W, H);
+  const my = MY(); g.save(); g.translate(0, my);
+  panel(14, 26, W - 28, 66);
+  const bounce = Math.round(Math.sin(t * 3) * 2);
+  drawText('BEAR', W/2, 36 + bounce, C.white, 7, 'center', C.royal);
+  g.drawImage(S.paw, 20, 76); g.drawImage(S.paw, W - 27, 76);
+  drawText('BLUE & WHITE FOOTBALL', W/2, 80, C.sky, 1, 'center');
+
+  panel(10, 104, W - 20, 80);
+  const lines = [['DRAG / ARROWS', 'RUN L-R', C.white], ['TAP / SPACE', 'SPIN JUKE', C.white],
+                 ['FOOTBALL', '+50 & BURST', C.gold], ['100 YARDS', 'TOUCHDOWN!', C.gold], ['RED HELMETS', 'RUSH', C.red], ['GOLD HELMETS', 'CHASE YOU', C.gold]];
+  lines.forEach((l, i) => { drawText(l[0], 16, 112 + i * 11, C.sky, 1, 'left'); drawText(l[1], W - 16, 112 + i * 11, l[2], 1, 'right'); });
+
+  drawText('BEST ' + best, W/2, 236, C.gold, 1, 'center', C.black);
+  // mini running back
+  g.drawImage((Math.floor(t * 8) & 1) ? S.pA : S.pB, W/2 - 5, 250);
+  drawText('M: SOUND', W/2, 274, C.white, 1, 'center', C.black);
+  g.restore();
+  drawButton('PLAY', t);
+  drawMute();
+}
+
+function drawOver(t){
+  g.fillStyle = 'rgba(0,10,25,0.6)'; g.fillRect(0, 0, W, H);
+  g.save(); g.translate(0, MY());
+  panel(14, 36, W - 28, 140);
+  drawText('TACKLED!', W/2, 48, C.red, 3, 'center', C.black);
+  drawText('SCORE', W/2, 78, C.sky, 1, 'center');
+  drawText(String(score()), W/2, 88, C.white, 3, 'center', C.black);
+  drawText('YARDS ' + yards() + '   TDS ' + tds, W/2, 114, C.white, 1, 'center');
+  drawText('BEST ' + best, W/2, 128, C.gold, 2, 'center', C.black);
+  if (newBest && (Math.floor(t * 4) & 1)) drawText('NEW BEST!', W/2, 150, C.gold, 2, 'center', C.red);
+  g.restore();
+  if (overT > 0.6) drawButton('PLAY AGAIN', t);
+  drawMute();
+}
+
+function present(){
+  sctx.imageSmoothingEnabled = false;
+  sctx.fillStyle = '#001a36'; sctx.fillRect(0, 0, screen.width, screen.height);
+  sctx.drawImage(buf, 0, 0, W, H, offX, offY, Math.round(W * scale), Math.round(H * scale));
+}
+
+let last = performance.now();
+function frame(now){
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 1/20) dt = 1/20; if (dt < 0) dt = 0;
+  update(dt);
+  render(now / 1000);
+  present();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
